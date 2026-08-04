@@ -1,6 +1,8 @@
 name: 云端推送测试
 
 on:
+  repository_dispatch:
+    types: [test]
   schedule:
     - cron: "*/2 * * * *"
   workflow_dispatch:
