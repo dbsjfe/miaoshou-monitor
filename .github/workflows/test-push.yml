@@ -1,8 +1,8 @@
 name: 云端推送测试
 
-# re-indexed 2026-08-05
-
 on:
+  schedule:
+    - cron: "*/2 * * * *"
   workflow_dispatch:
 
 jobs:
