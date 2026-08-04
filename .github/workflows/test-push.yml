@@ -1,5 +1,7 @@
 name: 云端推送测试
 
+# re-indexed 2026-08-05
+
 on:
   workflow_dispatch:
 
@@ -10,9 +12,7 @@ jobs:
     steps:
       - name: 发送测试推送
         run: |
-          curl -s -X POST "https://sctapi.ftqq.com/${{ secrets.SERVERCHAN_SEND_KEY }}.send" \
-            -d "title=☁️ 云端推送测试" \
-            -d "desp=这是来自 GitHub Actions 云端的测试推送。
+          curl -s -X POST "https://sctapi.ftqq.com/${{ secrets.SERVERCHAN_SEND_KEY }}.send"             -d "title=☁️ 云端推送测试"             -d "desp=这是来自 GitHub Actions 云端的测试推送。
 即使你的电脑已睡眠，也能正常收到这条消息。
 
 证明：电脑关机/睡眠不影响订单提醒。
