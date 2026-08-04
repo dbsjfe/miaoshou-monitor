@@ -1,0 +1,47 @@
+name: 妙手ERP订单监控
+
+on:
+  schedule:
+    # 每5分钟运行一次 (GitHub Actions 最短间隔)
+    - cron: "*/5 * * * *"
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  check-orders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 恢复通知状态缓存
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/miaoshou_orders_state.json
+          key: miaoshou-state-${{ github.run_number }}
+          restore-keys: |
+            miaoshou-state-
+
+      - name: 运行订单监控
+        env:
+          MIAOSHOU_APP_KEY: ${{ secrets.MIAOSHOU_APP_KEY }}
+          MIAOSHOU_APP_SECRET: ${{ secrets.MIAOSHOU_APP_SECRET }}
+          SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
+        run: python run.py
+
+      - name: 保存通知状态缓存
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/miaoshou_orders_state.json
+          key: miaoshou-state-${{ github.run_number }}
