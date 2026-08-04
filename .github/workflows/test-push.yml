@@ -13,4 +13,5 @@ jobs:
       - name: 发送测试推送
         env:
           KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
-        run: curl -s -X POST "https://sctapi.ftqq.com/${KEY}.send" -d "title=云端推送测试" -d "desp=来自 GitHub Actions 云端的测试推送。即使电脑已睡眠也能收到。时间: $(date +%Y-%m-%d\ %H:%M:%S)"
+        run: |
+          curl -s -X POST "https://sctapi.ftqq.com/${KEY}.send" -d "title=cloud push test" -d "desp=GitHub Actions cloud test. Works even if Mac is asleep. Time: $(date +%Y-%m-%d_%H:%M:%S)"
