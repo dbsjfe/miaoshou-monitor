@@ -227,12 +227,29 @@ def main():
     notified_set = set(state["notified_ids"])
     seen_this_run = set()  # 同一轮内防重复（一单多包裹）
     new_count = 0
+    cutoff = datetime.now(TZ_SHANGHAI) - timedelta(hours=LOOKBACK_HOURS)
 
     for order in orders:
         order_info = order.get("orderInfo", {})
         op_order_id = str(order_info.get("opOrderId", ""))
 
         if not op_order_id or op_order_id in notified_set or op_order_id in seen_this_run:
+            continue
+        seen_this_run.add(op_order_id)
+
+        # 只推送"下单时间在窗口内"的真新订单；
+        # 旧订单（仅因物流/状态同步触发包裹修改时间更新而返回）只记录不推送，避免误报旧单
+        gmt_start = order_info.get("gmtOrderStart", "")
+        is_new = True
+        try:
+            start_dt = datetime.strptime(gmt_start, "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ_SHANGHAI)
+            is_new = start_dt >= cutoff
+        except Exception:
+            pass
+
+        if not is_new:
+            print(f"[跳过] 旧订单(下单 {gmt_start})仅记录不推送: op={op_order_id}")
+            notified_set.add(op_order_id)
             continue
 
         platform = order.get("platformName", order.get("platform", "未知"))
@@ -243,7 +260,6 @@ def main():
 
         if push_wechat(title, msg):
             notified_set.add(op_order_id)
-            seen_this_run.add(op_order_id)
             new_count += 1
 
     # 更新状态
