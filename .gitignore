@@ -14,3 +14,6 @@ local/monitor.pid
 # state/local_state.json 由本机 monitor 通过 API 回写
 # state/cloud_state.json 由 Actions 提交回仓库
 !state/*.json
+
+# 安装包构建产物（用 tools/build_installer.py 一键重新生成）
+/dist/

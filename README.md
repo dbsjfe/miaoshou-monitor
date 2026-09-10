@@ -19,6 +19,29 @@ state/cloud_state.json   云端推完订单后由 workflow 提交回仓库
 
 推送通道按顺序自动降级：**邮件 → Server酱**。
 
+## 📦 一键安装包（要分享给别人用）
+
+把整套东西打包成**一个自解压文件**，对方不需要懂命令：
+
+```bash
+python3 tools/build_installer.py        # 生成 dist/妙手ERP-TK订单通知-安装包.py
+```
+
+把生成的这个 `.py` 文件发给对方（连同 `docs/安装前准备清单.md`），他只要：
+
+```bash
+python3 妙手ERP-TK订单通知-安装包.py --check      # 检查环境
+python3 妙手ERP-TK订单通知-安装包.py --install    # 释放到 ~/miaoshou-monitor
+python3 妙手ERP-TK订单通知-安装包.py --guide      # 完整安装说明
+```
+
+或者直接把文件丢给 AI 助手说「读取这个文件，按里面的说明在本机安装」——
+安装包顶部 docstring 里写好了《给 AI 助手的执行指令》，AI 会照着做完。
+
+安装包内含全部源码 + 脱敏的 `config.example.json` + 按目标目录生成的 launchd plist，
+**不含任何密钥**；同名文件会先备份成 `*.bak-<时间戳>`，不会静默覆盖。
+配好通道后 `test_push.py` 会一条条验证，避免"装完却一条通知都收不到"。
+
 ## 推送长什么样
 
 标题（出单地区在最前，一眼看清是哪个站点）：

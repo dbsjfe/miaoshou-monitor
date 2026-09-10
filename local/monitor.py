@@ -421,9 +421,22 @@ def main():
     alerter = DesktopAlert(cfg.get("desktop_alert", {}))
     alerter.check()
 
+    # 启动时先探查一次推送通道：全都没配好就别启动，直接给出可执行的修法
+    # （否则每轮只会打一句含糊的"额度已用尽"，让人以为是限流问题）
+    probe = Notifier(cfg, {"notified": {}, "pending": {}, "sent_today": {}})
+    if not probe.order:
+        log.error("❌ 没有任何可用的推送通道 —— 订单一条也发不出去。")
+        log.error("   请先填好配置里的空字段再启动：")
+        log.error("     miaoshou.app_key / app_secret     妙手开放平台的 AppKey/AppSecret")
+        log.error("     push.email.user/password/to       发件邮箱 + SMTP 授权码 + 收件邮箱")
+        log.error("     push.serverchan.send_key          Server酱 SendKey（可只配这一项兜底）")
+        log.error("   填完用这条命令验证：python test_push.py")
+
     log.info(f"妙手订单监控 v2 启动 | 轮询 {interval}s | 主通道 "
              f"{cfg['push'].get('channel_order', ['pushplus'])[0]}")
     log.info(f"电脑语音提醒: {'✅ 开' if alerter.ok else '⏭️ 关'}（{alerter.reason}）")
+    if probe.order:
+        log.info(f"推送通道: {' → '.join(probe.order)}")
 
     while True:
         try:
