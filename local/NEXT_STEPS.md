@@ -1,30 +1,26 @@
-# 运维备忘（2026-09-10 完成）
+# 运维备忘（更新于 2026-09-11）
 
 ## 已完成
 
 | # | 事项 | 结果 |
 |---|---|---|
 | 1 | GitHub Token（classic，scopes `repo` + `workflow`） | ✅ 已生成并用于以下三项 |
-| 2 | Actions Secrets 写入 | ✅ 11 个全部成功（`set_gh_secrets.py`） |
+| 2 | Actions Secrets 写入 | ✅ 全部成功（`set_gh_secrets.py`） |
 | 3 | README 明文密钥整改 | ✅ 已移除，改为「Name + 说明」表格 |
 | 4 | 云端链路接线（`monitor.yml` 的邮件 Secrets 映射） | ✅ 之前漏接，已补 |
 | 5 | 云端接管模式（Mac 关机也能逐单通知） | ✅ 代码就绪，靠 `state/local_state.json` 激活 |
 | 6 | Token 写入 `config.json` 的 `cloud_sync.token` | ✅ 本地可回写状态 |
 | 7 | 电脑端新订单**语音提醒**（`desktop_alert.py`） | ✅ 已接入，推送成功即念一句 + 弹横幅 |
 | 8 | 新订单文案加**出单地区**（标题 `【菲律宾 PH】…` + 正文 `★ 出单地区`） | ✅ 已生效 |
+| 9 | **推送通道收敛为「邮件」单通道**（2026-09-11） | ✅ 代码/配置/Secrets/文档/安装包全部同步；Secrets 由 11 个降为 **7 个** |
 
-## 待办（网络恢复后执行一次）
+## 当前生效配置
 
-2026-09-10 23:20 起本机 `github.com:443` 连不通（`api.github.com` 正常），
-因此最后一轮改动是**通过 Contents API 提交**的，远端内容与本地一致，
-但本地 commit 与远端**不同源**。网络恢复后在仓库目录执行一次即可对齐：
-
-```bash
-cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor
-git fetch origin && git reset --hard origin/main
-```
-
-（内容完全相同，执行它是安全的，不会丢东西——只是把本地指针指到远端那个 commit。）
+- 推送通道：`push.channel_order = ["email"]` —— **只有邮件一条**，无条数限制
+- 本机提醒：`desktop_alert.enabled = true` —— 推送成功的同一秒念一句 + 弹横幅（仅 macOS）
+- 云端兜底：`cloud_sync.enabled = true`，仓库 `dbsjfe/miaoshou-monitor`，走 `--cloud-fix`
+- 已删除的通道：Server酱 / WxPusher / 企业微信应用消息 / 群机器人 / PushPlus
+  （原因见 `LOCAL.md` 的「通道选型」归档章节；要重新启用得把类写回 `push_channels.py`）
 
 ## ⚠️ 必须尽快处理：密钥轮换
 
@@ -34,8 +30,10 @@ README 里的明文密钥已从代码中删除，但它仍存在于 **git 提交
 | 平台 | 操作 | 重置后要做 |
 |---|---|---|
 | 妙手开放平台 | 重置 **AppSecret** | 更新 `local/config.json` → 重跑 `set_gh_secrets.py` |
-| Server酱 `sct.ftqq.com` | 重置 **SendKey** | 同上 |
 | QQ 邮箱 | 授权码未进过仓库，**无需**轮换 | — |
+
+> Server酱 SendKey 曾出现在历史里，但**该通道已删除、Secrets 也不再被读取**，
+> 不再有轮换价值。若你还想彻底干净，可以去 `sct.ftqq.com` 把它删掉。
 
 ## ⚠️ Token 有效期提醒
 
@@ -62,6 +60,9 @@ kill $(cat monitor.pid)
 
 # 更新仓库 Secrets
 GH_TOKEN=<token> /Users/jianguo/.workbuddy/binaries/python/envs/default/bin/python set_gh_secrets.py
+
+# 重新打包给别人用的安装包（改过代码后）
+/Users/jianguo/.workbuddy/binaries/python/envs/default/bin/python ../tools/build_installer.py
 ```
 
 ## 云端排障

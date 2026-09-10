@@ -127,7 +127,7 @@ done
 
 # ------------------------------------------------------- 生成的 config.example.json
 CONFIG_EXAMPLE = r'''{
-  "_说明": "首次安装请把这个文件复制成 config.json，然后把所有空字符串填上再启动。留空表示该通道不使用。",
+  "_说明": "首次安装请把这个文件复制成 config.json，然后把所有空字符串填上再启动。",
   "miaoshou": {
     "_说明": "妙手 ERP 开放平台 → 应用管理 里拿 AppKey / AppSecret（必填）",
     "app_key": "",
@@ -135,42 +135,14 @@ CONFIG_EXAMPLE = r'''{
     "base_url": "https://openapi-erp.91miaoshou.com"
   },
   "push": {
-    "_说明": "channel_order 是从上到下的尝试顺序，前一个失败/额度用尽会自动切下一个",
-    "channel_order": ["email", "serverchan"],
+    "_说明": "只有邮件一个通道。channel_order 保留是为了将来加通道时不用改代码。",
+    "channel_order": ["email"],
     "min_interval_seconds": 13,
     "daily_limit": {
-      "wxpusher": 100000,
-      "wecom": 100000,
-      "wecom_bot": 100000,
-      "serverchan": 5,
       "email": 100000
     },
-    "wxpusher": {
-      "_说明": "可选通道。wxpusher.zjiecode.com 微信扫码登录→创建应用拿 appToken；关注后用公众号「我的 UID」拿 uid",
-      "app_token": "PLEASE_FILL_IN_APP_TOKEN",
-      "uid": "PLEASE_FILL_IN_UID",
-      "min_interval_seconds": 2
-    },
-    "wecom_bot": {
-      "_说明": "可选通道。企业微信群机器人 webhook 的 key（无 IP 白名单限制）",
-      "key": "PLEASE_FILL_IN_BOT_KEY",
-      "min_interval_seconds": 4,
-      "mention_all": false
-    },
-    "wecom": {
-      "_说明": "可选通道。企业微信自建应用，需要「企业可信IP」，家用宽带基本配不通，一般留空",
-      "corpid": "PLEASE_FILL_IN_CORPID",
-      "secret": "PLEASE_FILL_IN_SECRET",
-      "agentid": "PLEASE_FILL_IN_AGENTID",
-      "touser": "@all",
-      "min_interval_seconds": 2
-    },
-    "serverchan": {
-      "_说明": "可选通道。sct.ftqq.com 微信扫码登录拿 SendKey（形如 SCT...）。免费版每天只能发 5 条，只适合当兜底",
-      "send_key": ""
-    },
     "email": {
-      "_说明": "推荐主通道，无条数限制。注意 password 填的是 SMTP 授权码，不是邮箱登录密码",
+      "_说明": "唯一的推送通道，无条数限制。password 填的是 SMTP 授权码，不是邮箱登录密码！",
       "host": "smtp.qq.com",
       "port": 465,
       "user": "",
@@ -249,13 +221,13 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
 ================================================================
 
 【这是什么】
-  妙手 ERP 每 3 分钟轮询一次 TikTok 订单。有新订单时：
-    · 用邮件（或 Server酱/微信）把订单详情推给你，标题带出单地区，例如
+  妙手 ERP 每 3 分钟轮询一次 TikTok 订单。有新订单时，只有两条通知路径：
+    · 📧 邮件：把订单详情发到你的邮箱，标题带出单地区，例如
          【菲律宾 PH】您有一条新的TK 订单
-    · 在 Mac 上直接念一句「您有一条新的菲律宾订单，请及时处理」并弹通知横幅
-  已经修好的三个老毛病：不会重复推送、不会漏单、不受 Server酱「每天 5 条」限制
-  （多通道自动降级 + 积压合并 + 失败重试队列）。
-  可选：挂 GitHub Actions 做云端兜底，电脑关机/离线时也能收到通知。
+    · 🔊 电脑语音提醒：在 Mac 上直接念一句「您有一条新的菲律宾订单，请及时处理」
+         并弹一条通知中心横幅（只在推送成功的同一秒出声）
+  已经修好的老毛病：不会重复推送、不会漏单（积压合并 + 失败重试队列）。
+  可选：挂 GitHub Actions 做云端兜底，电脑关机/离线时也能收到邮件通知。
 
 【怎么用 —— 两种方式，任选一种】
 
@@ -290,12 +262,13 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
   第 2 步 · 向用户收集配置（务必逐项问清楚，缺一项就配不通）
       详细的获取方法都写在包内 安装前准备清单.md 里，可以先让用户看那份。
       - 妙手 ERP 开放平台的 AppKey / AppSecret（必填）
-      - 通知方式：默认「邮件优先 + Server酱兜底」；先问用户有没有邮箱可用
-          邮件：发件邮箱 + SMTP 授权码（不是登录密码！）+ 收件邮箱
-          Server酱：sct.ftqq.com 的 SendKey（可只配这一项）
-          WxPusher：wxpusher.zjiecode.com 的 appToken + UID（免费无限）
-          企业微信群机器人：webhook 里的 key
-      - 是否要云端兜底（需要 GitHub 仓库 + PAT）；不要就先设 enabled=false
+      - 邮件（唯一的推送通道，必填）：
+          发件邮箱 + SMTP 授权码（**不是登录密码**）+ 收件邮箱
+          + SMTP 服务器与端口（QQ 邮箱 smtp.qq.com:465；用户用别家邮箱要一并问）
+      - 电脑语音提醒：默认开启（仅 macOS 生效），用户不想要就把 desktop_alert.enabled 设 false
+      - 是否要云端兜底（需要 GitHub 仓库 + PAT）；不要就先设 cloud_sync.enabled=false
+      ⚠️ 除邮件外不要再引导用户去配 Server酱 / WxPusher / 企业微信 / PushPlus ——
+         本项目已把这些通道全部移除，config 里也没有对应字段。
 
   第 3 步 · 写入配置并验证（这一步不能省，推送失败是静默的）
       cp <项目目录>/local/config.example.json <项目目录>/local/config.json
@@ -311,7 +284,7 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
       bash <项目目录>/local/start.sh
       它会用 pidfile 做单例、用 caffeinate 防休眠、并在 monitor.py 异常退出后 10 秒自动重启。
       确认第一条日志： tail -20 <项目目录>/local/monitor.log
-      应能看到「推送通道: email → serverchan」「电脑语音提醒: ✅ 开」。
+      应能看到「推送通道: email」「电脑语音提醒: ✅ 开」。
       想开机自启（macOS）：把 <项目目录>/local/com.miaoshou.monitor.plist 复制到
       ~/Library/LaunchAgents/ 后执行：
         launchctl bootout gui/$(id -u)/com.miaoshou.monitor 2>/dev/null
@@ -329,7 +302,7 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
   验收标准
       · test_push.py 三条自检全部通过
       · monitor.log 出现「本轮完成 | 已通知 N」
-      · 用户收到过至少一条真实通知（邮件/微信）
+      · 用户收到过至少一条真实通知邮件
       · Mac 上听到语音 + 看到横幅
 
 【需要你提供的东西】
@@ -337,9 +310,11 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
   | 项目 | 哪里拿 | 必填 |
   |---|---|---|
   | 妙手 AppKey / AppSecret | 妙手 ERP → 开放平台 → 应用管理 | ✅ |
-  | 发件邮箱 + SMTP 授权码 + 收件邮箱 | QQ 邮箱：设置→账号→开启 SMTP→生成授权码 | 二选一 |
-  | Server酱 SendKey | sct.ftqq.com 微信扫码登录 | 二选一 |
+  | 发件邮箱 + SMTP 授权码 + 收件邮箱 | QQ 邮箱：设置→账号→开启 SMTP→生成授权码 | ✅ |
+  | SMTP 服务器 / 端口（非 QQ 邮箱时） | 见《安装前准备清单.md》的对照表 | 视邮箱而定 |
   | GitHub 用户名/仓库名 + PAT | github.com → Settings → Developer settings | 可选 |
+
+  电脑语音提醒不需要提供任何东西，装好即生效（仅 macOS）。
 
 【包内文件清单】
 
@@ -348,7 +323,7 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
   run.py                         云端入口（GitHub Actions 调用）
   .github/workflows/monitor.yml  云端定时任务
   local/monitor.py               主程序：轮询 + 去重状态机 + 推送 + 语音
-  local/push_channels.py         通道层：邮件/Server酱/WxPusher/企业微信 + 自动降级
+  local/push_channels.py         通道层：SMTP 邮件发送（唯一的推送通道）
   local/desktop_alert.py         电脑端语音 + 通知横幅（macOS）
   local/cloud_sync.py            本地↔云端状态同步（消除重复推送的关键）
   local/reconcile.py             对账/补推/日报
@@ -364,8 +339,10 @@ GUIDE = r'''妙手ERP → TikTok 新订单通知 · 一键安装包
   1) 完全收不到通知
      先跑 python3 local/test_push.py。它是静默失败的照妖镜：密钥写错、授权码失效、
      通道限流都只会体现在这条自检里，进程本身永远是"正常在跑"。
-  2) 每天只能收到几条
-     Server酱免费版每天只有 5 条。把邮件设成主通道（channel_order 里 email 在前）。
+  2) 收得到邮件但很慢 / 手机不弹窗
+     邮件投递本身有几秒到几十秒延迟，属正常。手机端不弹窗通常是邮件 App 没开推送，
+     或邮件被归到"推广/广告"文件夹。建议在手机邮件 App 里登录这个收件邮箱并开启通知。
+     若延迟以小时计，先看 monitor.log 里这单的推送时间，判断是"没及时推"还是"推了没弹"。
   3) 重复收到同一条
      只保留一份本机实例。kill 时用 kill $(cat monitor.pid)，不要 pkill start.sh。
   4) Mac 上没声音 / 没横幅

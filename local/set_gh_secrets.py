@@ -25,7 +25,10 @@ API = "https://api.github.com"
 
 
 def build_secret_map(cfg: dict) -> dict:
-    """从本地配置里挑出云端需要的 secret 名 -> 值"""
+    """从本地配置里挑出云端需要的 secret 名 -> 值
+
+    2026-09-11 起只有邮件一个通道，Secrets 收敛为 妙手 2 个 + SMTP 5 个。
+    """
     push = cfg["push"]
     email = push.get("email", {})
     out = {
@@ -36,20 +39,7 @@ def build_secret_map(cfg: dict) -> dict:
         "SMTP_USER": email.get("user", ""),
         "SMTP_PASSWORD": email.get("password", ""),
         "SMTP_TO": email.get("to", ""),
-        "SERVERCHAN_SEND_KEY": push.get("serverchan", {}).get("send_key", ""),
     }
-    # 可选通道：有值才写，避免覆盖成空
-    optional = {
-        "WXPUSHER_APP_TOKEN": push.get("wxpusher", {}).get("app_token", ""),
-        "WXPUSHER_UID": push.get("wxpusher", {}).get("uid", ""),
-        "WECOM_BOT_KEY": push.get("wecom_bot", {}).get("key", ""),
-        "WECOM_CORPID": push.get("wecom", {}).get("corpid", ""),
-        "WECOM_SECRET": push.get("wecom", {}).get("secret", ""),
-        "WECOM_AGENTID": push.get("wecom", {}).get("agentid", ""),
-    }
-    for k, v in optional.items():
-        if v and not str(v).startswith("PLEASE_FILL_IN"):
-            out[k] = v
     return {k: v for k, v in out.items() if v and not str(v).startswith("PLEASE_FILL_IN")}
 
 

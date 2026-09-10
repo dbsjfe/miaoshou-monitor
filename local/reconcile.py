@@ -50,26 +50,10 @@ def build_cfg():
             "base_url": "https://openapi-erp.91miaoshou.com",
         },
         "push": {
-            "channel_order": ["email", "serverchan"],
+            # 只有邮件一个通道（2026-09-11 收敛：Server酱/WxPusher/企业微信全部去掉）
+            "channel_order": ["email"],
             "min_interval_seconds": 13,
-            "daily_limit": {"wxpusher": 100000, "wecom": 100000,
-                            "wecom_bot": 100000, "serverchan": 5,
-                            "email": 100000},
-            "wxpusher": {
-                "app_token": os.environ.get("WXPUSHER_APP_TOKEN", ""),
-                "uid": os.environ.get("WXPUSHER_UID", ""),
-                "min_interval_seconds": 2,
-            },
-            "wecom_bot": {"key": os.environ.get("WECOM_BOT_KEY", ""),
-                          "min_interval_seconds": 4},
-            "wecom": {
-                "corpid": os.environ.get("WECOM_CORPID", ""),
-                "secret": os.environ.get("WECOM_SECRET", ""),
-                "agentid": os.environ.get("WECOM_AGENTID", ""),
-                "touser": os.environ.get("WECOM_TOUSER", "@all"),
-                "min_interval_seconds": 2,
-            },
-            "serverchan": {"send_key": os.environ.get("SERVERCHAN_SEND_KEY", "")},
+            "daily_limit": {"email": 100000},
             "email": {
                 "host": os.environ.get("SMTP_HOST", ""),
                 "port": os.environ.get("SMTP_PORT", "465"),

@@ -58,9 +58,6 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
-          SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
-          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
-          WXPUSHER_UID: ${{ secrets.WXPUSHER_UID }}
         run: python local/test_push.py
 
       - name: 推送新订单 / 日报兜底
@@ -73,9 +70,6 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
-          SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
-          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
-          WXPUSHER_UID: ${{ secrets.WXPUSHER_UID }}
         run: python run.py
 
       - name: 提交状态文件（去重的依据）

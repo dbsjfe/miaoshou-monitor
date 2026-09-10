@@ -8,9 +8,11 @@ v1 的三个问题与修复：
 |------|---------|---------|
 | 重复推送 | 推送成功才记录，失败反复重试；本地/云端各存各的状态 | 统一状态机：pending→notified，先占位后推送 |
 | 漏单 | 推送失败后 last_check 仍推进到 now，订单掉出 5 分钟窗口；只拉第 1 页 20 条 | 失败订单进 pending 队列（带快照，无需重新拉取即可重试）；分页拉全量 |
-| 每天只 5 次 | Server酱免费版 5 条/天 | 主通道 PushPlus(200/天)，Server酱降级备用；额度/限流自动切换 + 积压自动合并推送 |
+| 每天只 5 次 | 用了会限量的通道 | 改用**邮件**（无条数限制）；积压 ≥3 单自动合并推送，失败进 pending 重试 |
 
 状态机：订单 → pending（待推，含快照）→ 推送成功 → notified（终态）
+
+通知路径（2026-09-11 起）：**邮件**（唯一推送通道）＋ **电脑语音提醒**（本机 macOS，推送成功即播报）。
 """
 
 import hmac
@@ -428,12 +430,11 @@ def main():
         log.error("❌ 没有任何可用的推送通道 —— 订单一条也发不出去。")
         log.error("   请先填好配置里的空字段再启动：")
         log.error("     miaoshou.app_key / app_secret     妙手开放平台的 AppKey/AppSecret")
-        log.error("     push.email.user/password/to       发件邮箱 + SMTP 授权码 + 收件邮箱")
-        log.error("     push.serverchan.send_key          Server酱 SendKey（可只配这一项兜底）")
+        log.error("     push.email.host/user/password/to  邮箱服务器 + 发件邮箱 + SMTP 授权码 + 收件邮箱")
         log.error("   填完用这条命令验证：python test_push.py")
 
     log.info(f"妙手订单监控 v2 启动 | 轮询 {interval}s | 主通道 "
-             f"{cfg['push'].get('channel_order', ['pushplus'])[0]}")
+             f"{cfg['push'].get('channel_order', ['email'])[0]}")
     log.info(f"电脑语音提醒: {'✅ 开' if alerter.ok else '⏭️ 关'}（{alerter.reason}）")
     if probe.order:
         log.info(f"推送通道: {' → '.join(probe.order)}")
