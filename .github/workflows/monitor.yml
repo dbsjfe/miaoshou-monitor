@@ -5,6 +5,11 @@ on:
     # GitHub cron 用 UTC。每 10 分钟一次（整点高峰 GitHub 可能延迟几分钟）
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      test_push:
+        description: "只跑链路自检（发一条测试通知，不查订单）"
+        type: boolean
+        default: false
 
 # 避免两轮重叠导致重复推送
 concurrency:
@@ -31,7 +36,26 @@ jobs:
       - name: 安装依赖
         run: pip install requests
 
+      # 手动触发时勾选「只跑链路自检」→ 发一条测试通知就结束。
+      # 用途：改过 Secrets / 换过授权码之后，确认消息真的送得出去。
+      # 推送失败是静默的，不主动自检很容易等到"漏单"才发现。
+      - name: 链路自检
+        if: ${{ inputs.test_push }}
+        env:
+          MIAOSHOU_APP_KEY: ${{ secrets.MIAOSHOU_APP_KEY }}
+          MIAOSHOU_APP_SECRET: ${{ secrets.MIAOSHOU_APP_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
+          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
+          WXPUSHER_UID: ${{ secrets.WXPUSHER_UID }}
+        run: python local/test_push.py
+
       - name: 推送新订单 / 日报兜底
+        if: ${{ !inputs.test_push }}
         env:
           MIAOSHOU_APP_KEY: ${{ secrets.MIAOSHOU_APP_KEY }}
           MIAOSHOU_APP_SECRET: ${{ secrets.MIAOSHOU_APP_SECRET }}
@@ -46,7 +70,7 @@ jobs:
         run: python run.py
 
       - name: 提交状态文件（去重的依据）
-        if: always()
+        if: ${{ always() && !inputs.test_push }}
         run: |
           set -e
           if [ ! -f state/cloud_state.json ]; then
