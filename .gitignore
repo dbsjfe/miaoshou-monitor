@@ -2,3 +2,15 @@ __pycache__/
 *.pyc
 .DS_Store
 /tmp/
+
+# 密钥与运行时产物，禁止入库
+local/config.json
+local/*.log
+local/orders_state.json
+local/cloud_sync_state.json
+local/monitor.pid
+
+# 注意：state/ 下的两个状态文件必须入库 —— 它们是本地/云端去重的唯一依据
+# state/local_state.json 由本机 monitor 通过 API 回写
+# state/cloud_state.json 由 Actions 提交回仓库
+!state/*.json

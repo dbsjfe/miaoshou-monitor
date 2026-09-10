@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.miaoshou.monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/jianguo/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local/start.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/jianguo/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local</string>
+
+    <!-- 登录时自动启动 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 进程意外退出后自动重启 -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/jianguo/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local/launchd.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/jianguo/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local/launchd.stderr.log</string>
+</dict>
+</plist>

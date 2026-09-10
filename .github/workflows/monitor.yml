@@ -1,16 +1,23 @@
-name: 妙手ERP订单监控
+name: 妙手ERP订单通知（云端接管）
 
 on:
   schedule:
-    # 每5分钟运行一次 (GitHub Actions 最短间隔)
-    - cron: "*/5 * * * *"
-  # 允许手动触发
+    # GitHub cron 用 UTC。每 10 分钟一次（整点高峰 GitHub 可能延迟几分钟）
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
+# 避免两轮重叠导致重复推送
+concurrency:
+  group: miaoshou-notify
+  cancel-in-progress: false
+
+permissions:
+  contents: write          # 需要把 state/cloud_state.json 提交回仓库
+
 jobs:
-  check-orders:
+  notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
 
     steps:
       - name: 检出代码
@@ -24,24 +31,44 @@ jobs:
       - name: 安装依赖
         run: pip install requests
 
-      - name: 恢复通知状态缓存
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/miaoshou_orders_state.json
-          key: miaoshou-state-${{ github.run_number }}
-          restore-keys: |
-            miaoshou-state-
-
-      - name: 运行订单监控
+      - name: 推送新订单 / 日报兜底
         env:
           MIAOSHOU_APP_KEY: ${{ secrets.MIAOSHOU_APP_KEY }}
           MIAOSHOU_APP_SECRET: ${{ secrets.MIAOSHOU_APP_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
           SERVERCHAN_SEND_KEY: ${{ secrets.SERVERCHAN_SEND_KEY }}
+          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
+          WXPUSHER_UID: ${{ secrets.WXPUSHER_UID }}
         run: python run.py
 
-      - name: 保存通知状态缓存
+      - name: 提交状态文件（去重的依据）
         if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: /tmp/miaoshou_orders_state.json
-          key: miaoshou-state-${{ github.run_number }}
+        run: |
+          set -e
+          if [ ! -f state/cloud_state.json ]; then
+            echo "本轮没有产生状态变更，跳过提交"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state/cloud_state.json
+          if git diff --cached --quiet; then
+            echo "状态文件无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(state): 云端已推名单更新 [skip ci]"
+          # 本机可能同时用 API 写过 state/local_state.json，push 前先 rebase
+          for i in 1 2 3; do
+            if git push; then
+              echo "✅ 状态已提交"
+              exit 0
+            fi
+            echo "push 被拒（第 $i 次），rebase 后重试"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+            sleep 3
+          done
+          echo "❌ 状态提交失败，但订单通知已发出，不影响本次推送"
