@@ -68,13 +68,30 @@ state/cloud_state.json   云端推完订单 → workflow git commit 提交回仓
 
 ### 启用云端接管需要什么
 
-本机 `config.json` 的 `cloud_sync.token` 填上 GitHub token
-（fine-grained，只勾本仓库 + `Contents: Read and write`）。
+本机 `config.json` 的 `cloud_sync.token` 填上 GitHub token。
+**已于 2026-09-10 配好并实测生效**（classic token，scopes `repo` + `workflow`）。
 
 **⚠️ 该 token 失效的隐患**：本地会继续推单但无法回写状态 →
 本地日志报 `[同步] token 无效或无权限` / `回写本机状态失败`，
 而云端会因 `local_state` 变旧而接管 → **可能重复**。
-所以这两条日志一旦出现要立刻处理。
+所以这两条日志一旦出现要立刻处理。建议设 1 年有效期，到期前换新。
+
+### 链路自检（2026-09-10 新增）
+
+推送失败是**静默**的——密钥写错、授权码失效、通道限流，进程都照跑不误。
+所以两边都留了自检入口：
+
+```bash
+# 本地
+cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local
+/Users/jianguo/.workbuddy/binaries/python/envs/default/bin/python test_push.py
+```
+
+云端：仓库 → Actions → `妙手ERP订单通知（云端接管）` → **Run workflow** → 勾选
+**「只跑链路自检」** → 它会发一条测试通知就结束，不查订单、不写状态。
+
+自检会打印「配置的通道顺序 / 实际启用的通道 / 实际生效顺序」三者对照——
+改过 Secrets 或换过授权码之后跑一次，比等漏单了才发现划算。
 
 ---
 
@@ -220,8 +237,15 @@ launchctl list | grep miaoshou     # 有输出即已挂载
 ### 自检
 
 ```bash
-/Users/jianguo/.workbuddy/binaries/python/versions/3.13.12/bin/python3 local/test_connectivity.py
+cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local
+# 推送通道是否真的能送达（推荐，改动密钥后必跑）
+/Users/jianguo/.workbuddy/binaries/python/envs/default/bin/python test_push.py
+# 妙手 API 连通性
+/Users/jianguo/.workbuddy/binaries/python/envs/default/bin/python test_connectivity.py
 ```
+
+> ⚠️ 解释器必须用 venv 版。受管 `3.13.12/bin/python3` 缺 `certifi`，
+> 所有 HTTPS 请求会静默失败（见踩坑 #17）。
 
 ---
 
@@ -294,33 +318,50 @@ launchctl list | grep miaoshou     # 有输出即已挂载
 22. **配置文件里的占位符会被当真实值用**：`config.json` 的 `cloud_sync.token` 若留着
     `PLEASE_FILL_IN_...`，每轮都会拿它去请求并刷 401。`CloudSync._clean_token()`
     统一把占位符/过短的值当空处理，并降级为只读。
+23. **本地 git 工作副本会被"别人"改**（2026-09-10 踩坑）：开了云端接管之后，
+    本机 monitor 通过 GitHub API 回写 `state/local_state.json`，Actions 也会提交
+    `state/cloud_state.json` —— 这两者都在你本地 clone 的仓库里。
+    于是本地手动 `git push` 会**被拒**（`rejected ... fetch first`）。
+    解法：`git pull --rebase --autostash origin main` 再 push。
+    另外**不要**用 `git add -A` 顺手提交 `state/local_state.json` ——
+    工作副本里的那份可能比仓库里的旧，提交上去等于回退云端看到的状态。
+24. **Actions 计费按 job 向上取整到整分钟**：监控一轮实际只跑 11 秒，但仍按 1 分钟计价。
+    `*/10` 的 cron = 144 分钟/天 ≈ 4300 分钟/月，**超出私有仓库免费额度 2000**。
+    Public 仓库不受此限（标准 runner 免费无限），这是当前保持 public 的主要理由。
 
 ---
 
-## 三、当前运行状态（2026-09-10 22:00 更新）
+## 三、当前运行状态（2026-09-10 23:05 更新）
 
-- ✅ **生效实例**：工作区 `local/monitor.py`（v2）常驻运行，pidfile 单例 + 孤儿清理 + 自愈循环
-  均已实测有效（kill -9 后 10 秒自动重启）
-- ✅ **端到端验证（21:36）**：测试消息经由 **Server酱** 成功送达个人微信
-- ✅ **端到端验证（21:39，换序后）**：测试消息经由 **邮件** 成功送达（`经由通道: email`）
-- ✅ **云端接管已实现**（22:00）：`cloud_sync.py` + `reconcile.py --cloud-fix` +
-  workflow 每 10 分钟 + `state/` 去重状态；本地已重启加载新代码，日志显示
-  `云端状态同步已启用 | 节流 300s | ⚠️ 缺少 token，只能读不能写`
-- ⏳ **待办：`cloud_sync.token` 未填** → 云端目前仍处于"日报兜底"模式（不会重复推）。
-  填上 PAT（本仓库 + `Contents: Read and write`）后云端才会进入接管模式
-- ✅ **沙箱代理污染已修**：启动时剥离 `127.0.0.1` 回环代理，API 请求恢复正常（见踩坑 #17）
-- 📌 **当前生效顺序（用户指定）**：`email → serverchan`，本地与云端一致。
-  WxPusher / 企业微信 / 群机器人都未启用，代码保留
-- ✅ **邮件通道已打通**（2026-09-10 21:33）：QQ 邮箱 + SMTP 授权码（值见 `config.json`），实测登录 235
-- ❌ `push.wecom` 已填入 CorpID / Secret / AgentId，但**实测被 60020 可信IP 拦截**，
-  且未认证企业无法配置（需公网 IP 服务器）→ 该通道作废，仅保留代码
-- ✅ **云端 workflow**：`monitor.yml` 每 10 分钟跑一次，`permissions: contents: write` +
-  `concurrency` 防重叠 + 状态文件提交（带 rebase 重试）；
-  需在仓库 Secrets 里补 `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_TO`
-  与 `SERVERCHAN_SEND_KEY`
-- ⏸ **旧实例**：`/Users/jianguo/.workbuddy/miaoshou-monitor` 已停止（2026-09-10 02:20 起因 certifi 缺失挂了 16 小时，963 次报错）
-- ⚠️ **launchd 注册待补**：当前是脱离会话拉起的常驻进程（含自愈），能撑到关机/注销为止。
-  在**访达里双击 `local/MiaoshouMonitor.command`** 或到终端执行下面两条，恢复开机自启：
+**一句话**：本地实时推、云端兜底接管，两条链路共享去重名单，全链路已实测打通。
+
+### 已实测通过（都有证据，不是"看着没报错"）
+
+| 验证项 | 结论 | 证据 |
+|---|---|---|
+| 本地 → 邮件 | ✅ 送达 | 日志 `[推送] ✅ email 成功` |
+| 本地推送通道 | ✅ email / serverchan 双通道可用 | `test_push.py` 自检 |
+| 本地 → 仓库回写状态 | ✅ 生效 | 仓库出现提交 `chore(state): 本机已推 12 单` |
+| 仓库 → 云端去重 | ✅ 生效 | Actions 日志 `已知已推 12 单（本地 12 + 云端 0）` |
+| 云端模式判定 | ✅ 正确进入接管 | `[run.py] 检测到 local_state.json，进入「接管补推」模式` |
+| 云端零误推 | ✅ 无重复 | `[云端] ✅ 无需要补推的订单` |
+| **云端能真发邮件** | ✅ **送达** | 自检运行：`✅ 自检通过：经由通道「email」送达` |
+| 11 个 Actions Secrets | ✅ 全部写入 | `set_gh_secrets.py` → 成功 11 / 失败 0 |
+
+### 关键状态
+
+- ✅ **生效实例**：`local/monitor.py`（v2）常驻运行，pidfile 单例 + 孤儿清理 + 自愈循环
+  （kill -9 后 10 秒自动重启，实测有效）
+- ✅ **本地通道顺序（用户指定）**：`email → serverchan`
+- ✅ **云端接管已启用**：`cloud_sync.token` 已填，`run.py` 走 `--cloud-fix`
+- ✅ **邮件通道**：QQ 邮箱 + SMTP 授权码（值见 `config.json`），登录返回 235
+- ❌ `push.wecom` 虽已填 CorpID / Secret / AgentId，但**被 60020 可信IP 拦截**
+  （未认证企业需公网 IP 服务器才能配），该通道作废，代码保留
+- ⏸ **旧实例** `/Users/jianguo/.workbuddy/miaoshou-monitor` 已停止
+  （2026-09-10 02:20 起因 certifi 缺失挂了 16 小时，963 次报错）
+- ⚠️ **launchd 开机自启待补**：当前是脱离会话拉起的常驻进程（含自愈），
+  能撑到关机/注销为止。在**访达里双击 `local/MiaoshouMonitor.command`**，
+  或到**终端**（不是 AI 会话）执行：
 
   ```bash
   cp ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local/com.miaoshou.monitor.plist.example \
@@ -330,23 +371,43 @@ launchctl list | grep miaoshou     # 有输出即已挂载
   launchctl list | grep miaoshou      # 有输出即成功
   ```
 
-  注意：AI 会话里的 shell 拿不到 Aqua session，`launchctl bootstrap` 会报
-  `Bootstrap failed: 5: Input/output error`，必须在**终端/Terminal** 或双击 `.command` 执行。
+  AI 会话里的 shell 拿不到 Aqua session，`launchctl bootstrap` 会报
+  `Bootstrap failed: 5: Input/output error`，必须在终端或双击 `.command` 执行。
 - **不要同时起两份本地实例**：`start.sh` 靠 `monitor.pid` 做单例判断（只认自己这一份），
-  若在别的目录再起一份，pidfile 互不可见，两份并存会导致同一订单推两次
-  （虽然 `opOrderId` 去重能挡一部分）。
+  若在别的目录再起一份，pidfile 互不可见，两份并存会导致同一订单推两次。
 
-常用命令：
+### 常用命令
 
 ```bash
 cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local
-pgrep -fl miaoshou_monitor.py            # 看是否在跑
-tail -f monitor.log                      # 看实时日志
-grep -c "TLS CA certificate" monitor.log # 健康检查：应为 0
+tail -f monitor.log                       # 实时日志
+cat monitor.pid                           # 当前进程号
+kill $(cat monitor.pid)                   # 重启（让自愈循环自己拉起来；别 pkill start.sh）
+grep -c "TLS CA certificate" monitor.log  # 健康检查：应为 0
+grep "同步" monitor.log | tail            # 看状态回写是否正常
 ```
 
-## ⚠️ 安全提醒
+## ⚠️ 安全提醒：密钥必须轮换
 
-GitHub 仓库 `dbsjfe/miaoshou-monitor` 当前是 **public**，`README.md` 里明文写了
-AppKey / AppSecret / Server酱 SendKey。建议：改私有仓库 + 从 README 移除密钥 + 轮换密钥。
-（本次未做任何 push。）
+README 里的明文密钥**已从代码中删除**，但仍存在于 **git 历史**（`97a0925`），
+而仓库是 **public** —— 等同于已经公开过。删文件只是止血，**必须去平台重置**：
+
+| 平台 | 操作 | 重置后 |
+|---|---|---|
+| 妙手开放平台 | 重置 **AppSecret** | 改 `local/config.json` → 重跑 `set_gh_secrets.py` |
+| Server酱 `sct.ftqq.com` | 重置 **SendKey** | 同上 |
+| QQ 邮箱授权码 | 从未进过仓库 | 无需轮换 |
+
+**另一个可选决策**：要不要把仓库转私有？
+
+GitHub 按「**每个 job 向上取整到整分钟**」计费（官方原文：*rounds the minutes and partial
+minutes each job uses up to the nearest whole minute*），所以一轮跑 11 秒也算 1 分钟：
+
+| cron | 轮数/天 | 计费分钟/月 | 私有免费额度 2000 |
+|---|---|---|---|
+| `*/10`（当前） | 144 | ≈ 4300 | ❌ 超一倍 |
+| `*/15` | 96 | ≈ 2900 | ❌ 仍超 |
+| `*/30` | 48 | ≈ 1440 | ✅ 够 |
+
+**当前保持 public**：Actions 免费无限，且代码里已无任何明文凭证（值全在 Secrets）。
+若转 Private，记得同步把 cron 改成 `*/30 * * * *`。
