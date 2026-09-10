@@ -182,10 +182,16 @@ def snapshot(order: dict) -> dict:
         "start": oi.get("gmtOrderStart", ""),
         "platform": order.get("platformName", order.get("platform", "未知")),
         "shop": order.get("shopName", "未知店铺"),
+        # 出单地区：妙手在顶层和 orderInfo 里都给了 site/siteName，
+        # 顶层更全（如 site=MY, siteName=马来），拿不到再退回 orderInfo
+        "site": order.get("site") or oi.get("site", ""),
+        "site_name": order.get("siteName") or oi.get("siteName", ""),
         "status": oi.get("appOrderStatusText", oi.get("appOrderStatus", "未知")),
         "amount": oi.get("orderAmount", 0),
         "currency": oi.get("currency", ""),
         "country": consignee.get("countryName", consignee.get("country", "")),
+        "province": consignee.get("state", ""),
+        "city": consignee.get("city", ""),
         "items": [
             {
                 "title": it.get("title", "未知商品"),
@@ -201,15 +207,37 @@ def snapshot(order: dict) -> dict:
     }
 
 
+def region_tag(s: dict) -> str:
+    """出单地区标签，如「马来 MY」。取不到就返回空串。
+
+    注意：本次改动之前入队/入名单的老快照没有 site 字段，一律用 .get 兜底，
+    不要写 s["site"]，否则重试老单会 KeyError。
+    """
+    site = str(s.get("site") or "").strip()
+    name = str(s.get("site_name") or "").strip()
+    if name and site and name != site:
+        return f"{name} {site}"
+    return name or site
+
+
+def title_new(s: dict, suffix: str = "") -> str:
+    """统一的新单标题：出单地区放最前，扫一眼就知道是哪个站点出的单"""
+    tag = region_tag(s)
+    return f"{'【' + tag + '】' if tag else ''}您有一条新的{short(s)} 订单{suffix}"
+
+
 def format_message(s: dict) -> str:
     lines = [f"  - {i['title']} ×{i['qty']}  {i['price']:.2f} {s['currency']}"
              for i in s["items"]]
     if s["item_count"] > 5:
         lines.append(f"  ... 共 {s['item_count']} 件商品")
-    return (f"平台: {s['platform']} | 店铺: {s['shop']}\n"
+    where = " / ".join(p for p in (s.get("country", ""), s.get("province", ""),
+                                   s.get("city", "")) if p) or "未知"
+    return (f"★ 出单地区: {region_tag(s) or '未知'}\n"
+            f"平台: {s['platform']} | 店铺: {s['shop']}\n"
             f"订单号: {s['sn']}\n"
             f"状态: {s['status']} | 金额: {s['amount']:.2f} {s['currency']}\n"
-            f"国家: {s['country']}\n\n"
+            f"收货地: {where}\n\n"
             f"商品:\n" + "\n".join(lines) +
             f"\n\n⏰ 下单 {s['start']}")
 
@@ -222,7 +250,8 @@ def format_batch(items: list[dict]) -> str:
     """积压时合并成一条推送：1 次推送覆盖 N 单，绕开日额度与频率限制"""
     total = sum(i["amount"] for i in items)
     cur = items[0]["currency"] if items else ""
-    lines = [f"{i + 1}. {s['sn']} | {s['amount']:.2f} {s['currency']} | {s['country']}"
+    lines = [f"{i + 1}. 【{region_tag(s) or '未知'}】{s['sn']} | "
+             f"{s['amount']:.2f} {s['currency']} | {s.get('country', '')}"
              for i, s in enumerate(items)]
     return (f"共 {len(items)} 单，合计 {total:.2f} {cur}\n\n" + "\n".join(lines) +
             f"\n\n⏰ {datetime.now(TZ_SHANGHAI).strftime('%Y-%m-%d %H:%M:%S')}")
@@ -253,10 +282,12 @@ def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
         batch = list(pending.values())[:20]
         oids = list(pending.keys())[:20]
         if len(batch) == 1:
-            title = f"您有一条新的{short(batch[0])} 订单"
+            title = title_new(batch[0])
             content = format_message(batch[0])
         else:
-            title = f"新订单 {len(batch)} 单（合并推送）"
+            sites = sorted({region_tag(s) for s in batch if region_tag(s)})
+            scope = f"【{'/'.join(sites)}】" if sites else ""
+            title = f"{scope}新订单 {len(batch)} 单（合并推送）"
             content = format_batch(batch)
         ok, info = notifier.send(title, content)
         sent = 0
@@ -276,7 +307,7 @@ def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
     # 正常情况：逐单推送
     sent = 0
     for oid, s in list(pending.items()):
-        ok, info = notifier.send(f"您有一条新的{short(s)} 订单", format_message(s))
+        ok, info = notifier.send(title_new(s), format_message(s))
         if ok:
             state["notified"][oid] = {"sn": s["sn"],
                                       "ts": datetime.now(TZ_SHANGHAI).isoformat()}
