@@ -96,14 +96,60 @@ def send_real(cfg, notifier, count: int) -> int:
     return 0 if ok else 1
 
 
+def voice_test(cfg, use_real: bool = False) -> int:
+    """只测本机语音提醒：不出网、不推送、不写状态。"""
+    from desktop_alert import DesktopAlert  # noqa: E402
+
+    alert = DesktopAlert(cfg.get("desktop_alert", {}))
+    ok, reason = alert.check()
+    log.info("=" * 48)
+    log.info("语音提醒状态: %s —— %s", "✅ 可用" if ok else "❌ 不可用", reason)
+    if not ok:
+        log.error("语音提醒不可用，先按上面的原因排障（常见：enabled=false / 非 macOS / "
+                  "系统静音 / 跑在 LaunchDaemon 下没有 GUI 会话）")
+        return 1
+
+    snaps = None
+    if use_real:
+        from monitor import (TZ_SHANGHAI, fetch_all_orders, snapshot)  # noqa: E402
+        since = datetime.now(TZ_SHANGHAI) - timedelta(hours=72)
+        orders = fetch_all_orders(cfg["miaoshou"], cfg["monitor"], since)
+        if orders:
+            orders.sort(key=lambda o: o.get("orderInfo", {}).get("gmtOrderStart", ""),
+                        reverse=True)
+            snaps = [snapshot(orders[0])]
+            log.info("用最近一条真实订单播报: %s", snaps[0].get("sn"))
+        else:
+            log.warning("最近 72 小时没有订单，改用示例数据播报")
+
+    if not snaps:
+        snaps = [{"sn": "VOICE-TEST", "site": "MY", "site_name": "马来",
+                  "platform": "tiktok", "amount": 123.45, "currency": "MYR",
+                  "shop": "SoftTots MY"}]
+
+    log.info("将念出: %s", alert._speech_text(snaps))
+    alert.announce(snaps)
+    log.info("=" * 48)
+    log.info("如果听到了语音 + 看到通知横幅 → 语音提醒正常。")
+    log.info("只有横幅没声音 → 系统设置→声音 未静音 / 音量；只有声音没横幅 → "
+             "系统设置→通知 里允许「脚本编辑器/终端」发通知。")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="推送链路自检 / 文案预览")
     ap.add_argument("--real", action="store_true",
                     help="拉真实订单并按正式格式推送（预览文案），不写状态文件")
     ap.add_argument("--count", type=int, default=1, help="--real 时推送几条（默认 1）")
+    ap.add_argument("--voice", action="store_true",
+                    help="只测电脑语音提醒（不出网、不推送）：念一句 + 弹通知横幅")
     args = ap.parse_args()
 
     cfg = build_cfg()
+
+    if args.voice:
+        return voice_test(cfg, use_real=args.real)
+
     notifier = report_channels(cfg)
     if not notifier.channels:
         log.error("❌ 没有任何可用通道 —— 检查 config.json / Actions Secrets")

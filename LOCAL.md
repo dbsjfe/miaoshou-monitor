@@ -30,6 +30,56 @@
 
 ---
 
+## 电脑语音提醒（2026-09-11 新增）：来单时本机念一句
+
+### 为什么要做
+
+邮件 / Server酱 属于**远程**提醒。坐在电脑前干活时手机不在手边、微信消息被折叠，
+一单来了照样十几分钟后才发现。补一个**本机**提醒：推送成功的同一秒出声 + 弹横幅。
+
+### 实现位置
+
+| 文件 | 职责 |
+|---|---|
+| `local/desktop_alert.py` | `DesktopAlert` 类：`say` 念话 + `osascript` 弹横幅 + `afplay` 兜底提示音 |
+| `local/monitor.py` | `push_pending(..., sent_snaps)` 收集**推送成功**的快照；`run_once` 末尾统一 `announce()` |
+| `local/test_push.py --voice` | 只测语音，不出网不推送 |
+
+### 四个必须知道的坑
+
+1. **只有推送成功才播报**。`sent_snaps` 只在 `ok=True` 时 append —— 推失败还念一句
+   等于白高兴，而且会让人误以为通知链路是通的。
+2. **必须跑在 GUI(Aqua) 会话**。`start.sh` 从终端启动、或 launchd **LaunchAgent**
+   都在 Aqua 会话内，有声音；换成 **LaunchDaemon(root)** 就是**完全静默**——
+   这是"配置都对但没反应"最常见的原因，且没有任何报错。
+3. **`say` 是同步阻塞的**（念完才返回）。所以一律 `subprocess.Popen(..., start_new_session=True)`
+   分离进程 + **绝不 wait()**，只用 `poll()` 回收僵尸。否则一次播报会把 180 秒的轮询
+   循环卡住几秒，多单时还会几句叠在一起谁也听不清 —— 因此多单**合并成一句**
+   （"您有 3 条新订单，出单地区马来、菲律宾"）。
+4. **沙箱（AI 会话）里 `say` 可能无声或失败**，这是环境限制不是配置错误。判断标准看
+   **退出码**：`say -v Tingting "测试"; echo $?` 返回 0 才算真的发出去了。
+
+### 自检
+
+```bash
+python local/test_push.py --voice          # 示例文案
+python local/test_push.py --voice --real   # 用最近一条真实订单的站点播报
+python local/desktop_alert.py              # 模块自带自检（单条 + 多条各念一遍）
+```
+
+离线端到端仿真（不联网、不真发邮件，验证「推送成功 → 播报」整条链路）：
+mock 掉 `monitor.fetch_all_orders` 与 `monitor.Notifier`，构造新单后直接调
+`monitor.run_once(cfg, state, None, DesktopAlert(cfg["desktop_alert"]))`，
+日志应出现 `[语音] 🔊 播报: 您有一条新的菲律宾订单，请及时处理`。
+
+### 已知小瑕疵（未修，影响很小）
+
+`format_batch()` 合计金额用的是 `items[0]["currency"]`。**多站点混合**积压时
+（如马来 MYR + 菲律宾 PHP）会把不同币种直接相加、再标第一个币种的符号。
+当前实际业务是单站点为主，暂不处理；要修的话应按 currency 分组小计。
+
+---
+
 ## 云端接管（2026-09-10 新增）：Mac 关机也能逐单通知
 
 ### 为什么要做
@@ -390,6 +440,9 @@ cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor/local
 - ✅ **本地通道顺序（用户指定）**：`email → serverchan`
 - ✅ **云端接管已启用**：`cloud_sync.token` 已填，`run.py` 走 `--cloud-fix`
 - ✅ **邮件通道**：QQ 邮箱 + SMTP 授权码（值见 `config.json`），登录返回 235
+- ✅ **电脑语音提醒（2026-09-11 加）**：`desktop_alert.enabled=true`，语音 `Tingting`；
+  日志启动行有 `电脑语音提醒: ✅ 开（语音 Tingting，速率 190，含通知横幅）`，
+  推送成功的同一秒念一句 + 弹横幅（多单合并成一句）。自检：`python local/test_push.py --voice`
 - ❌ `push.wecom` 虽已填 CorpID / Secret / AgentId，但**被 60020 可信IP 拦截**
   （未认证企业需公网 IP 服务器才能配），该通道作废，代码保留
 - ⏸ **旧实例** `/Users/jianguo/.workbuddy/miaoshou-monitor` 已停止

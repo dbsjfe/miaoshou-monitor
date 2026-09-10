@@ -26,6 +26,7 @@ import requests
 
 from push_channels import Notifier
 from cloud_sync import CloudSync
+from desktop_alert import DesktopAlert
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = SCRIPT_DIR / "config.json"
@@ -257,8 +258,13 @@ def format_batch(items: list[dict]) -> str:
             f"\n\n⏰ {datetime.now(TZ_SHANGHAI).strftime('%Y-%m-%d %H:%M:%S')}")
 
 
-def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
-    """推送 pending 队列：成功→notified，失败→保留重试。返回本轮新推成功的单数。"""
+def push_pending(notifier: Notifier, state: dict, merge_threshold: int,
+                 sent_snaps: list | None = None) -> int:
+    """推送 pending 队列：成功→notified，失败→保留重试。返回本轮新推成功的单数。
+
+    sent_snaps：可选。把本轮**推送成功**的订单快照收集进来，供调用方统一播报语音。
+    只有真的推成功才收 —— 播报和推送要保持一致，不能推失败还念一句，白高兴。
+    """
     pending = state["pending"]
     if not pending:
         return 0
@@ -297,6 +303,8 @@ def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
                                           "ts": datetime.now(TZ_SHANGHAI).isoformat()}
                 del pending[oid]
                 sent += 1
+                if sent_snaps is not None:
+                    sent_snaps.append(s)
             else:
                 s["attempts"] += 1
                 s["last_error"] = info
@@ -313,6 +321,8 @@ def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
                                       "ts": datetime.now(TZ_SHANGHAI).isoformat()}
             del pending[oid]
             sent += 1
+            if sent_snaps is not None:
+                sent_snaps.append(s)
         else:
             s["attempts"] += 1
             s["last_error"] = info
@@ -321,7 +331,7 @@ def push_pending(notifier: Notifier, state: dict, merge_threshold: int) -> int:
 
 
 # ---------------- 主流程 ----------------
-def run_once(cfg, state, cs=None):
+def run_once(cfg, state, cs=None, alerter: DesktopAlert | None = None):
     log.info("=" * 56)
     mon = cfg["monitor"]
     notifier = Notifier(cfg, state)
@@ -367,10 +377,18 @@ def run_once(cfg, state, cs=None):
     log.info(f"新单 {new_cnt} 个，pending 队列 {len(state['pending'])} 个")
 
     sent = 0
+    sent_snaps: list = []
     if not notifier.has_budget():
         log.error("[额度] 所有通道今日额度已用尽，pending 保留到次日自动补推")
     else:
-        sent = push_pending(notifier, state, mon.get("merge_threshold", 3))
+        sent = push_pending(notifier, state, mon.get("merge_threshold", 3), sent_snaps)
+
+    # 推送成功 → 本机念一句（多单合并成一句，避免几句话叠在一起听不清）
+    if alerter is not None and sent_snaps:
+        try:
+            alerter.announce(sent_snaps)
+        except Exception as e:
+            log.warning(f"[语音] 播报异常（不影响推送）: {e}")
 
     save_state(state)
 
@@ -398,12 +416,18 @@ def main():
     if cs.enabled:
         log.info(f"云端状态同步已启用 | 仓库 {cs.repo} | 节流 {cs.throttle}s"
                  + ("" if cs.token else " | ⚠️ 缺少 token，只能读不能写"))
+
+    # 本机语音提醒（只本地跑；云端 Actions 无音频设备，不启用）
+    alerter = DesktopAlert(cfg.get("desktop_alert", {}))
+    alerter.check()
+
     log.info(f"妙手订单监控 v2 启动 | 轮询 {interval}s | 主通道 "
              f"{cfg['push'].get('channel_order', ['pushplus'])[0]}")
+    log.info(f"电脑语音提醒: {'✅ 开' if alerter.ok else '⏭️ 关'}（{alerter.reason}）")
 
     while True:
         try:
-            run_once(cfg, state, cs)
+            run_once(cfg, state, cs, alerter)
         except Exception as e:
             log.exception(f"轮询异常: {e}")
         nxt = datetime.now(TZ_SHANGHAI) + timedelta(seconds=interval)

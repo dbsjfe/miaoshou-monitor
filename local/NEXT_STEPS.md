@@ -10,6 +10,21 @@
 | 4 | 云端链路接线（`monitor.yml` 的邮件 Secrets 映射） | ✅ 之前漏接，已补 |
 | 5 | 云端接管模式（Mac 关机也能逐单通知） | ✅ 代码就绪，靠 `state/local_state.json` 激活 |
 | 6 | Token 写入 `config.json` 的 `cloud_sync.token` | ✅ 本地可回写状态 |
+| 7 | 电脑端新订单**语音提醒**（`desktop_alert.py`） | ✅ 已接入，推送成功即念一句 + 弹横幅 |
+| 8 | 新订单文案加**出单地区**（标题 `【菲律宾 PH】…` + 正文 `★ 出单地区`） | ✅ 已生效 |
+
+## 待办（网络恢复后执行一次）
+
+2026-09-10 23:20 起本机 `github.com:443` 连不通（`api.github.com` 正常），
+因此最后一轮改动是**通过 Contents API 提交**的，远端内容与本地一致，
+但本地 commit 与远端**不同源**。网络恢复后在仓库目录执行一次即可对齐：
+
+```bash
+cd ~/WorkBuddy/2026-09-10-18-17-36/miaoshou-monitor
+git fetch origin && git reset --hard origin/main
+```
+
+（内容完全相同，执行它是安全的，不会丢东西——只是把本地指针指到远端那个 commit。）
 
 ## ⚠️ 必须尽快处理：密钥轮换
 

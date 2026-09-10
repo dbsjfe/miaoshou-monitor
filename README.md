@@ -61,6 +61,51 @@ python local/test_push.py --real --count 3  # 走合并推送格式
 
 > 私有说明（含通道选型踩坑、沙箱代理污染、单例陷阱等）见 [LOCAL.md](./LOCAL.md)
 
+## 🔊 电脑语音提醒（只在本机 Mac 上生效）
+
+邮件和 Server酱 都是**远程**提醒 —— 人在电脑前、手机不在手边时，来单可能要十几分钟后才看到。
+本机语音提醒会在**推送成功的同一秒**念一句，并弹一条通知中心横幅，眼耳双保险。
+
+```
+🔊 您有一条新的菲律宾订单，请及时处理          ← 单条
+🔊 您有 3 条新订单，出单地区马来、菲律宾，请及时处理   ← 多单合并成一句，避免重叠听不清
+```
+
+只用 macOS 自带命令（`say` / `osascript` / `afplay`），**零第三方依赖**。配置在
+`local/config.json` 的 `desktop_alert` 段：
+
+```json
+"desktop_alert": {
+  "enabled": true,
+  "voice": "Tingting",        // 中文女声，系统自带；留空用系统默认
+  "rate": 190,                // 语速
+  "sound": "Glass",           // 通知横幅提示音，留空则静音
+  "notify_center": true,      // 是否弹通知中心横幅
+  "max_seconds": 15,
+  "template_one": "您有一条新的{region}订单，请及时处理",
+  "template_many": "您有{count}条新订单，出单地区{regions}，请及时处理"
+}
+```
+
+自检（不出网、不推送，只念一句 + 弹横幅）：
+
+```bash
+python local/test_push.py --voice
+python local/test_push.py --voice --real   # 用最近一条真实订单的站点播报
+```
+
+**只在推送成功后才播报** —— 推送失败还念一句只会白高兴一场。云端 Actions 没有音频设备，
+`run.py` 一律不启用语音，只有本机 `monitor.py` 会用。
+
+排障：
+
+| 现象 | 原因 |
+|---|---|
+| 只有横幅没声音 | 系统设置 → 声音 静音了，或音量 0 |
+| 只有声音没横幅 | 系统设置 → 通知 → 允许「终端 / 脚本编辑器」发通知 |
+| 完全没有反应 | 进程跑在 **LaunchDaemon(root)** 下，不在 GUI 会话里；改用 LaunchAgent 或 `start.sh` 从终端启动 |
+| 声音念的是英文/怪音 | `voice` 名字不存在，日志会有 `[语音] 声音「xxx」不存在，改用系统默认音色` |
+
 ## ⚠️ 云端 cron 是"尽力而为"，别指望它准时
 
 GitHub 官方文档写明：`schedule` 事件在高负载时可延迟，**排队任务甚至可能被直接丢弃**。
