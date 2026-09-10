@@ -300,7 +300,7 @@ def main():
     # 补推：合并成一条，避免刷屏 + 省额度
     snaps = [snapshot(o) for o in missing]
     if len(snaps) == 1:
-        title = f"补推漏单：{short(snaps[0])} {snaps[0]['sn']}"
+        title = f"补推漏单：【{region_tag(snaps[0]) or '未知'}】{short(snaps[0])} {snaps[0]['sn']}"
         content = format_message(snaps[0])
     else:
         title = f"补推漏单 {len(snaps)} 单"
